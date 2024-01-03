@@ -1,0 +1,252 @@
+docker system info | grep -E 'Username|Registry'
+docker info | sed '/Username:/!d;s/.* //'
+
+docker push sajinapk/liberty:tagname
+docker push sajinapk/tomcat:tagname
+
+docker tag local-image:tagname sajinapk/liberty:tagname
+docker push sajinapk/liberty:tagname
+
+docker run -d -p 5000:5000 --restart=always --name liberty registry:2
+de6e6d96c717ef2f3d67fad2e00b4192445e38e51d8be78b089dbd1141e17a12
+
+
+Run a local registry🔗
+
+Use a command like the following to start the registry container:
+$ docker run -d -p 5000:5000 --restart=always --name registry registry:2
+
+[f you want to use the registry as part of your permanent infrastructure, you should set it to restart automatically when Docker restarts or if it exits. This example uses the --restart always flag to set a restart policy for the registry.]
+
+[the first part of the -p value is the host port and the second part is the port within the container. Within the container, the registry listens on port 5000 by default.]
+
+Pull (or build) some image from the hub
+$ docker pull ubuntu
+
+Tag the image so that it points to your registry
+$ docker image tag ubuntu localhost:5000/myfirstimage
+
+Push it
+$ docker push localhost:5000/myfirstimage
+
+Pull it back
+$ docker pull localhost:5000/myfirstimage
+
+Now stop your registry and remove all data
+$ docker container stop registry && docker container rm -v registry
+
+
+
+
+————————————————————
+tar -czvf openjdk.tar.gz jdk
+
+docker build -f ./DockerFile . -t myjdk:ccfix --no-cache | tee dockerBuild1.log
+
+docker build -f ./Dockerfile.ubuntu.openjdk11.saj . -t open-liberty:myjdk-openj9 --no-cache | tee dockerLibertyBuild1.log
+
+root@salem1:/home/dev/openj9-openjdk-jdk11/build/linux-x86_64-normal-server-release/images# docker images
+REPOSITORY   TAG       IMAGE ID       CREATED              SIZE
+ccfix        v2        0ae6d6d64e4f   About a minute ago   1.86GB
+registry     2         65f3b3441f04   11 days ago          24MB
+ubuntu       22.04     3b418d7b466a   3 weeks ago          77.8MB
+
+docker ps -a
+CONTAINER ID   IMAGE        COMMAND                  CREATED        STATUS        PORTS                    NAMES
+27a34103cc80   registry:2   "/entrypoint.sh /etc…"   12 hours ago   Up 12 hours   0.0.0.0:5000->5000/tcp   registry
+
+docker login
+
+docker run --rm -it cb5517d5c965
+
+docker run -it  -m 200m <image_id>
+
+docker start <container_id>
+docker exec -it container-name sh
+
+Docker rm <container id>
+Docker rmi <image id>
+
+root@salem1:/home/dev/openj9-openjdk-jdk11# docker ps -a
+CONTAINER ID   IMAGE          COMMAND                  CREATED         STATUS         PORTS                    NAMES
+b8b16aeac8f4   fe667ffea364   "/bin/bash"              9 minutes ago   Up 7 minutes                            tender_galileo
+27a34103cc80   registry:2     "/entrypoint.sh /etc…"   2 days ago      Up 2 days      0.0.0.0:5000->5000/tcp   registry
+
+docker cp b8b16aeac8f4:/opt/java/openjdk/bin/vlog.txt.20230525.013244.18 .    [From container to host]
+
+docker cp openj9 b8b16aeac8f4:/.  [ From container to host]
+
+
+
+Docker Build Failure:
+———————————————————————————————————————————————————————————————————
+The solution here is to find the container that failed:
+$ docker ps -a
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS                          PORTS               NAMES
+6934ada98de6        42e0228751b3        "/bin/sh -c './utils/"   24 minutes ago      Exited (1) About a minute ago                       sleepy_bell
+
+Commit it to an image:
+$ docker commit 6934ada98de6
+sha256:7015687976a478e0e94b60fa496d319cdf4ec847bcd612aecf869a72336e6b83
+
+And then run the image [if necessary, running bash]:
+$ docker run -it 7015687976a4 [bash -il]
+Now you are actually looking at the state of the build at the time that it failed, instead of at the time before running the command that caused the failure.
+
+
+Everytime docker successfully executes a RUN command from a Dockerfile, a new layer in the image filesystem is committed. Conveniently you can use those layers ids as images to start a new container.
+
+Take the following Dockerfile:
+FROM busybox
+RUN echo 'foo' > /tmp/foo.txt
+RUN echo 'bar' >> /tmp/foo.txt
+
+and build it: (you can see the image layer id, when you set DOCKER_BUILDKIT=0)
+
+$ DOCKER_BUILDKIT=0 docker build -t so-26220957 .
+Sending build context to Docker daemon 47.62 kB
+Step 1/3 : FROM busybox
+ ---> 00f017a8c2a6
+Step 2/3 : RUN echo 'foo' > /tmp/foo.txt
+ ---> Running in 4dbd01ebf27f
+ ---> 044e1532c690
+Removing intermediate container 4dbd01ebf27f
+Step 3/3 : RUN echo 'bar' >> /tmp/foo.txt
+ ---> Running in 74d81cb9d2b1
+ ---> 5bd8172529c1
+Removing intermediate container 74d81cb9d2b1
+Successfully built 5bd8172529c1
+
+You can now start a new container from 00f017a8c2a6, 044e1532c690 and 5bd8172529c1:
+$ docker run --rm 00f017a8c2a6 cat /tmp/foo.txt
+cat: /tmp/foo.txt: No such file or directory
+
+$ docker run --rm 044e1532c690 cat /tmp/foo.txt
+foo
+
+$ docker run --rm 5bd8172529c1 cat /tmp/foo.txt
+foo
+bar
+
+of course you might want to start a shell to explore the filesystem and try out commands:
+$ docker run --rm -it 044e1532c690 sh      
+/ # ls -l /tmp
+total 4
+-rw-r--r--    1 root     root             4 Mar  9 19:09 foo.txt
+/ # cat /tmp/foo.txt 
+foo
+
+When one of the Dockerfile command fails, what you need to do is to look for the id of the preceding layer and run a shell in a container created from that id:
+
+docker run --rm -it <id_last_working_layer> bash -il
+Once in the container:
+try the command that failed, and reproduce the issue
+then fix the command and test it
+finally update your Dockerfile with the fixed command
+
+
+
+——————————————————————————————————————————————————————————————————————
+
+
+To push to or pull from our local registry, we need to add the registry’s location to the repository name. The format is as follows: my.registry.address:port/repositoryname.
+In our example, we need to replace my.registry.address.port with localhost:5000 because our registry is running on our localhost and is listening on port 5000. Here is the full repository name: localhost:5000/ubuntu. To do this, we’ll run the docker tag command:
+$ docker tag ubuntu localhost:5000/ubuntu
+
+Now we can push to our local registry.
+$ docker push localhost:5000/ubuntu
+
+
+Finally pull the image from our local registry and verify that it is now pulled to our local instance of Docker.
+$ docker pull localhost:5000/ubuntu
+Using default tag: latest
+latest: Pulling from ubuntu
+Digest: sha256:sha256:3093096ee188f8...8c091c8cb4579c39cc4e
+Status: Downloaded newer image for localhost:5000/ubuntu:latest
+localhost:5000/ubuntu:latest
+
+$ docker images
+REPOSITORY              TAG       IMAGE ID       CREATED        SIZE
+registry                2.7       5c4008a25e05   40 hours ago   26.2MB
+ubuntu                  latest    f63181f19b2f   5 weeks ago    72.9MB
+localhost:5000/ubuntu   latest    f63181f19b2f   5 weeks ago    72.9MB
+
+
+———————————————————————————————
+
+
+Docker testing with AcmeAir
+
+
+
+podman run -v /home/dev/mybuild:/root/openj9-openjdk-jdk11 -it ubimage:myjdk
+
+————
+
+cd /home/dev/openj9-openjdk-jdk11/build/linux-x86_64-normal-server-release/images
+rm openjdk.tar.gz
+tar -czvf openjdk.tar.gz jdk
+docker build -f ./DockerFile . -t myjdk:ccfix --no-cache | tee dockerBuild1.log
+docker images
+	REPOSITORY        TAG                   IMAGE ID       CREATED         SIZE
+	myjdk             ccfix                 10d22601df23   2 minutes ago   1.95GB
+
+cd /home/dev/dockerized-apps/AcmeAirEE8
+cd MongoContext
+./buildMongo.sh
+cd..
+
+cd /home/dev/dockerized-apps/ci.docker/releases/23.0.0.5/full
+docker build -f ./Dockerfile.ubuntu.openjdk11_saj . -t open-liberty:myjdk-openj9 --no-cache | tee dockerLibertyBuild1.log
+docker images
+	REPOSITORY          TAG                   IMAGE ID       CREATED          SIZE
+	open-liberty        myjdk-openj9          6f1b4cda4c7b   35 seconds ago   1.98GB
+	mongo-acmeair-ee8   5.0.15                3a7954332034   24 minutes ago   659MB
+	myjdk               ccfix                 10d22601df23   34 minutes ago   1.95GB
+
+cd /home/dev/dockerized-apps/AcmeAirEE8
+cd LibertyContext
+./build_acmeair_saj.sh
+cd ..
+cd JMeterContext
+./build_jmeter.sh
+	docker images
+	REPOSITORY            TAG                   IMAGE ID       CREATED          SIZE
+	jmeter-acmeair        5.3                   f69defb1f51f   2 minutes ago    393MB
+	liberty-acmeair-ee8   J17                   4173cb4edfb0   6 minutes ago    1.99GB
+	open-liberty          myjdk-openj9          6f1b4cda4c7b   16 minutes ago   1.98GB
+	mongo-acmeair-ee8     5.0.15                3a7954332034   40 minutes ago   659MB
+	myjdk                 ccfix                 10d22601df23   50 minutes ago   1.95GB
+cd ..
+./startAcmeAir_saj.sh
+
+
+In another terminal
+cd /home/dev/dockerized-apps/AcmeAirEE8
+./runJMeter.sh 
+
+
+In another terminal
+docker ps
+CONTAINER ID   IMAGE                      COMMAND                  CREATED         STATUS         PORTS                              NAMES
+51dcac8a2523   liberty-acmeair-ee8:J17    "/opt/ol/helpers/run…"   2 minutes ago   Up 2 minutes   0.0.0.0:9080->9080/tcp, 9443/tcp   acmeair
+ae5830e4e001   mongo-acmeair-ee8:5.0.15   "docker-entrypoint.s…"   2 minutes ago   Up 2 minutes   27017/tcp                          mongodb
+27a34103cc80   registry:2                 "/entrypoint.sh /etc…"   3 weeks ago     Up 12 days     0.0.0.0:5000->5000/tcp             registry
+
+
+ENV OPENJ9_JAVA_OPTIONS="-Xjit:verbose={codecache,compilePerformance},vlog=vlog.txt,count=1,safeReservePhysicalMemoryValue=5120 -Xcodecache512K"
+
+ENV OPENJ9_JAVA_OPTIONS="-Xjit:verbose={codecache,compilePerformance,CheckpointRestore},vlog=vlog.txt,disableSuffixLogs"
+
+
+89c88
+<     OPENJ9_JAVA_OPTIONS="-XX:+IgnoreUnrecognizedVMOptions -XX:+IdleTuningGcOnIdle -Xshareclasses:name=openj9_system_scc,cacheDir=/opt/java/.scc,readonly,nonFatal -Dosgi.checkConfiguration=false"
+---
+>     OPENJ9_JAVA_OPTIONS="-Xjit:verbose={codecache,compilePerformance},vlog=vlog.txt"
+
+
+
+
+find . -name 'vlog.txt.*' -exec grep -n "requested codecache size" {} \; -print
+
+-Xjit:disableCodeCacheConsolidation

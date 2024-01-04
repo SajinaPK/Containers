@@ -1,0 +1,82 @@
+When running AcmeAir keep these things in check:
+
+1. Mongodb
+Only 5.0.15 works with this version of acmeair so better to run in containers
+DockerFile:
+FROM docker.io/library/mongo:5.0.15
+COPY AcmeAirDBBackup /AcmeAirDBBackup
+
+Commands:
+docker run --rm -d --name mongodb --network=host mongo-acmeair-ee8:5.0.15 --nojournal
+docker exec -it mongodb mongorestore --drop /AcmeAirDBBackup
+
+2. Liberty
+Download the Liberty packages from here: https://repo1.maven.org/maven2/io/openliberty/openliberty-runtime/23.0.0.11/
+
+Docker Files which will help in undersatdning whats being done: https://github.com/OpenLiberty/ci.docker/blob/fd371711bc8e08bf03aa163d44b76f76efff1b36/releases/23.0.0.12/full/Dockerfile.ubuntu.openjdk17
+https://github.com/openliberty/ci.docker
+
+On the Liberty side we need to launch a server: Lets says name acmeairee8.
+/home/new_dev/Liberty/openliberty/wlp/bin/server create acmeairee8
+and then go to: /home/new_dev/Liberty/openliberty/wlp/usr/servers/acmeairee8 and edit the server.xml to look like this.
+
+<?xml version="1.0" encoding="UTF-8"?>
+<server description="new server">
+    <!-- Enable features -->
+    <featureManager>
+         <feature>cdi-2.0</feature>
+         <feature>jaxrs-2.1</feature>
+    </featureManager>
+
+    <!-- To access this server from a remote client add a host attribute to the following element, e.g. host="*" -->
+    <httpEndpoint id="defaultHttpEndpoint"
+                  host="*"
+                  httpPort="9080"
+                  httpsPort="9443" />
+
+    <webApplication name="acmeair-monolithic" location="acmeair-java-2.0.0-SNAPSHOT.war" contextRoot="/"/>
+</server>
+
+Copy the acmeair-java-2.0.0-SNAPSHOT.war into the apps folder at /home/new_dev/Liberty/openliberty/wlp/usr/servers/acmeairee8/apps
+export MONGO_HOST="mongodb"
+export MONGO_PORT="27017"
+export MONGO_DBNAME="acmeair"
+
+start the server: /home/new_dev/Liberty/openliberty/wlp/bin/server start acmeairee8
+
+Check the messages.log at /home/new_dev/Liberty/openliberty/wlp/usr/servers/acmeairee8/logs to confirm if the server started without any errors.
+
+3. JMeter
+
+wget https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.3.tgz
+tar -xzf apache-jmeter-5.3.tgz
+# Set jmeter home, add jmeter to the PATH and set JVM options
+export JMETER_HOME="/jmeter/apache-jmeter-$JMETER_VERSION"
+# Add jmeter to the PATH
+export PATH="$JMETER_HOME/bin:$PATH"
+# Set JVM options
+export JVM_ARGS "-Xms1g -Xmx1g"
+
+echo 'summariser.interval=6' >> $JMETER_HOME/bin/jmeter.properties
+echo 'CookieManager.save.cookies=true' >> $JMETER_HOME/bin/jmeter.properties
+
+# Copy the script to be executed and other needed files
+cp DriverFiles/AcmeAir-v5.jmx $JMETER_HOME/AcmeAir-v5.jmx
+cp DriverFiles/Airports.csv $JMETER_HOME/Airports.csv
+cp DriverFiles/Airports2.csv $JMETER_HOME/Airports2.csv
+cp DriverFiles/hosts.csv $JMETER_HOME/hosts.csv
+cp DriverFiles/json-simple-1.1.1.jar $JMETER_HOME/lib/ext/
+cp DriverFiles/acmeair-jmeter-2.0.0-SNAPSHOT.jar $JMETER_HOME/lib/ext/
+cp DriverFiles/applyLoad.sh $JMETER_HOME/bin/applyLoad.sh
+chmod u+x $JMETER_HOME/bin/applyLoad.sh
+
+To get logs edit log4j2.xml to include the logs then the logs will be defaulted to jmeter.log. You can edit this file name and location by passing -j /output/acmeair.stats.0 to the jmeter command.
+
+jmeter -n -DusePureIDs=true -t ../AcmeAir-v5.jmx -JHOST=localhost -JPORT=9080 -JUSERBOTTOM=0 -JUSER=199 -JURL=/ -JTHREAD=10 -JDURATION=300 -JRAMP=0
+
+4. Other
+--network=host passed to the docker run command runs the process on localhost. If the address is already in use the run might fail. Kill any unwanted process listening on the required port
+sudo lsof -iTCP -sTCP:LISTEN -n -P
+
+Run the container in non-detached mode with -it to debug the failure.
+

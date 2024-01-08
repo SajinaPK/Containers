@@ -80,3 +80,23 @@ sudo lsof -iTCP -sTCP:LISTEN -n -P
 
 Run the container in non-detached mode with -it to debug the failure.
 
+Docker run command quits immediately. The best way to debug the container always try to run in attached mode, As you can run the container in two ways.
+Foreground: In foreground mode, docker run with -it can start the process in the container and attach the console to the process’s standard input, output, and standard error. So in the foreground, you can see the output or also if there is an error during boot time.
+
+Always run the container in the foreground for debugging purpose.
+docker run --rm -it --name mongodb --network=host mongo-acmeair-ee8:5.0.15 --nojournal
+
+Detached mode: shown by the option --detach or -d, means that a Docker container runs in the background of your terminal. It does not receive input or display output
+{"t":{"$date":"2024-01-03T19:04:10.512+00:00"},"s":"E",  "c":"CONTROL",  "id":20568,   "ctx":"initandlisten","msg":"Error setting up listener","attr":{"error":{"code":9001,"codeName":"SocketException","errmsg":"Address already in use"}}}
+
+You can kill the previous mongod instance and start the new one.
+
+To kill the previous mongod instance, first search for a list of tasks running on your machine by typing,
+sudo lsof -iTCP -sTCP:LISTEN -n -P
+
+Search for mongod COMMAND and its PID and type,
+sudo kill <mongo_command_pid>
+
+Now start your mongod instance by typing,
+You can see MongoDB running successfully.
+
